@@ -16,7 +16,7 @@ import { uploadMultiple } from "../middleware/uploadMiddleware.js";
 const router = express.Router();
 
 router.get("/",               getAllProducts);
-router.post("/seed/data",     seedProducts);          
+router.post("/seed/data",     protect, adminOnly, seedProducts);
 router.get("/:id",            getProduct);
 router.post("/",              protect, adminOnly, uploadMultiple, createProduct);
 router.put("/:id",            protect, adminOnly, uploadMultiple, updateProduct);

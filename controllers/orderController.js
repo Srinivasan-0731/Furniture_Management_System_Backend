@@ -5,10 +5,37 @@ import Order from "../models/Order.js";
 import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
 
+// ── Razorpay instance ─────────────────────────────────────────
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
+  key_id: process.env.RAZORPAY_KEY_ID || "missing_key_id",
+  key_secret: process.env.RAZORPAY_KEY_SECRET || "missing_key_secret",
 });
+
+const checkRazorpayKeys = (res) => {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    res.status(500);
+    throw new Error(
+      "Razorpay keys missing on server. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Render Environment."
+    );
+  }
+};
+
+// ── Helper: Razorpay order create (real error message kaatum) ─
+const createRazorpayOrderSafe = async (res, amountInRupees) => {
+  try {
+    return await razorpay.orders.create({
+      amount: Math.round(amountInRupees * 100),
+      currency: "INR",
+      receipt: `receipt_${Date.now()}`,
+    });
+  } catch (err) {
+    console.error("Razorpay error:", JSON.stringify(err));
+    res.status(502);
+    throw new Error(
+      err?.error?.description || err?.message || "Razorpay order creation failed"
+    );
+  }
+};
 
 // ── Helper: build order items from cart ──────────────────────
 const buildOrderItemsFromCart = async (userId) => {
@@ -85,21 +112,21 @@ export const createOrder = asyncHandler(async (req, res) => {
 // 2. CREATE RAZORPAY ORDER (Pay Now from Cart)
 // ─────────────────────────────────────────────────────────────
 export const createRazorpayOrder = asyncHandler(async (req, res) => {
-  const { shippingAddress, amount } = req.body;
+  checkRazorpayKeys(res);
 
-  const razorpayOrder = await razorpay.orders.create({
-    amount: Math.round(amount * 100),
-    currency: "INR",
-    receipt: `receipt_${Date.now()}`,
-  });
+  const { shippingAddress } = req.body;
 
-  // Fetch cart items to save in order
-  const { cart, orderItems, itemsPrice, shippingPrice, taxPrice } =
+  // 1. Mudhalla cart check
+  const { cart, orderItems, itemsPrice, shippingPrice, taxPrice, totalPrice } =
     await buildOrderItemsFromCart(req.user._id).catch((err) => {
       res.status(400);
       throw err;
     });
 
+  // 2. Razorpay order: frontend amount illa, server calculate panna total use pannum
+  const razorpayOrder = await createRazorpayOrderSafe(res, totalPrice);
+
+  // 3. DB order create
   const order = await Order.create({
     user: req.user._id,
     items: orderItems,
@@ -109,12 +136,12 @@ export const createRazorpayOrder = asyncHandler(async (req, res) => {
     itemsPrice,
     shippingPrice,
     taxPrice,
-    totalPrice: amount,
+    totalPrice,
     orderStatus: "pending",
     orderNumber: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
   });
 
-  // Deduct stock & clear cart immediately
+  // 4. Stock deduct & cart clear
   await deductStockAndClearCart(cart, req.user._id);
 
   res.json({
@@ -132,6 +159,8 @@ export const createRazorpayOrder = asyncHandler(async (req, res) => {
 // 3. VERIFY RAZORPAY PAYMENT
 // ─────────────────────────────────────────────────────────────
 export const verifyRazorpayPayment = asyncHandler(async (req, res) => {
+  checkRazorpayKeys(res);
+
   const { orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
 
   const sign = razorpayOrderId + "|" + razorpayPaymentId;
@@ -190,6 +219,8 @@ export const createPayLaterOrder = asyncHandler(async (req, res) => {
 // 5. CREATE RAZORPAY ORDER FOR EXISTING PENDING ORDER (MyOrders Pay Now)
 // ─────────────────────────────────────────────────────────────
 export const createRazorpayOrderForExisting = asyncHandler(async (req, res) => {
+  checkRazorpayKeys(res);
+
   const order = await Order.findById(req.params.id);
   if (!order) { res.status(404); throw new Error("Order not found"); }
   if (order.user.toString() !== req.user._id.toString()) {
@@ -199,11 +230,7 @@ export const createRazorpayOrderForExisting = asyncHandler(async (req, res) => {
     res.status(400); throw new Error("Order already paid");
   }
 
-  const razorpayOrder = await razorpay.orders.create({
-    amount: Math.round(order.totalPrice * 100),
-    currency: "INR",
-    receipt: `receipt_${Date.now()}`,
-  });
+  const razorpayOrder = await createRazorpayOrderSafe(res, order.totalPrice);
 
   res.json({
     success: true,
@@ -220,7 +247,11 @@ export const createRazorpayOrderForExisting = asyncHandler(async (req, res) => {
 // 6. GET MY ORDERS
 // ─────────────────────────────────────────────────────────────
 export const getMyOrders = asyncHandler(async (req, res) => {
-  const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
+  // Cancel aana orders user-ku kaattaadhu (DB-la irukkum, admin paakkalaam)
+  const orders = await Order.find({
+    user: req.user._id,
+    orderStatus: { $ne: "cancelled" },
+  }).sort({ createdAt: -1 });
   res.json({ success: true, data: orders });
 });
 

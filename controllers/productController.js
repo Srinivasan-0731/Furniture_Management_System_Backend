@@ -52,7 +52,7 @@ const getAllProducts = async (req, res) => {
       data: products,
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, message: err.message, error: err.message });
   }
 };
 
@@ -63,11 +63,11 @@ const getProduct = async (req, res) => {
       .populate('category', 'name slug')
       .populate('reviews.user', 'name avatar');
     if (!product) {
-      return res.status(404).json({ success: false, error: 'Product not found' });
+      return res.status(404).json({ success: false, message: 'Product not found', error: 'Product not found' });
     }
     res.json({ success: true, data: product });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, message: err.message, error: err.message });
   }
 };
 
@@ -78,7 +78,7 @@ const createProduct = async (req, res) => {
 
     const categoryExists = await Category.findById(category);
     if (!categoryExists) {
-      return res.status(400).json({ success: false, error: 'Invalid category' });
+      return res.status(400).json({ success: false, message: 'Invalid category', error: 'Invalid category' });
     }
 
     const images = req.files ? req.files.map((f) => `/uploads/${f.filename}`) : [];
@@ -98,7 +98,7 @@ const createProduct = async (req, res) => {
     await Category.findByIdAndUpdate(category, { $inc: { productCount: 1 } });
     res.status(201).json({ success: true, message: 'Product created!', data: product });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(400).json({ success: false, message: err.message, error: err.message });
   }
 };
 
@@ -107,7 +107,7 @@ const updateProduct = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) {
-      return res.status(404).json({ success: false, error: 'Product not found' });
+      return res.status(404).json({ success: false, message: 'Product not found', error: 'Product not found' });
     }
 
     const fields = ['name', 'description', 'price', 'discountPrice', 'stock', 'material', 'deliveryDays', 'isFeatured', 'isActive'];
@@ -126,7 +126,7 @@ const updateProduct = async (req, res) => {
     const updated = await product.save();
     res.json({ success: true, message: 'Product updated!', data: updated });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(400).json({ success: false, message: err.message, error: err.message });
   }
 };
 
@@ -135,7 +135,7 @@ const deleteProduct = async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) {
-      return res.status(404).json({ success: false, error: 'Product not found' });
+      return res.status(404).json({ success: false, message: 'Product not found', error: 'Product not found' });
     }
     product.images.forEach((img) => {
       const imgPath = path.join(__dirname, '..', img);
@@ -144,7 +144,7 @@ const deleteProduct = async (req, res) => {
     await Category.findByIdAndUpdate(product.category, { $inc: { productCount: -1 } });
     res.json({ success: true, message: 'Product deleted!' });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, message: err.message, error: err.message });
   }
 };
 
@@ -153,14 +153,14 @@ const deleteProductImage = async (req, res) => {
   try {
     const { imagePath } = req.body;
     const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ success: false, error: 'Product not found' });
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found', error: 'Product not found' });
     product.images = product.images.filter((img) => img !== imagePath);
     await product.save();
     const fullPath = path.join(__dirname, '..', imagePath);
     if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
     res.json({ success: true, message: 'Image removed', data: product.images });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, message: err.message, error: err.message });
   }
 };
 
@@ -169,16 +169,16 @@ const addReview = async (req, res) => {
   try {
     const { rating, comment } = req.body;
     const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ success: false, error: 'Product not found' });
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found', error: 'Product not found' });
     const alreadyReviewed = product.reviews.find((r) => r.user.toString() === req.user._id.toString());
-    if (alreadyReviewed) return res.status(400).json({ success: false, error: 'You have already reviewed this product' });
+    if (alreadyReviewed) return res.status(400).json({ success: false, message: 'You have already reviewed this product', error: 'You have already reviewed this product' });
     product.reviews.push({ user: req.user._id, name: req.user.name, rating: Number(rating), comment });
     product.numReviews = product.reviews.length;
     product.rating     = product.reviews.reduce((sum, r) => sum + r.rating, 0) / product.reviews.length;
     await product.save();
     res.status(201).json({ success: true, message: 'Review added' });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, message: err.message, error: err.message });
   }
 };
 
@@ -531,7 +531,7 @@ const seedProducts = async (req, res) => {
 
     res.json({ success: true, message: `${products.length} sofas seeded!`, data: products });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, message: err.message, error: err.message });
   }
 };
 

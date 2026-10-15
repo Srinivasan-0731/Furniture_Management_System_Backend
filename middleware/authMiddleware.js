@@ -14,16 +14,10 @@ export const protect = asyncHandler(async (req, res, next) => {
     throw new Error("Not authorized, no token");
   }
 
-  
-  console.log("Token:", token);
-  console.log("JWT_SECRET:", process.env.JWT_SECRET);
-
   let decoded;
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("Decoded:", decoded); 
   } catch (error) {
-    console.log("JWT Error:", error.message); 
     res.status(401);
     throw new Error("Not authorized, token failed");
   }

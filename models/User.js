@@ -4,12 +4,12 @@ import bcrypt from 'bcryptjs';
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password: { type: String, required: true, minlength: 6 },
+  password: { type: String, required: true, minlength: 6, select: false },
   phone: { type: String, default: '' },
   address: { type: String, default: '' },
   avatar: { type: String, default: '' },
-  role: { type: String, enum: ['user', 'admin'], default: 'admin' },
-  isActive: { type: Boolean, default: true }  
+  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
 userSchema.pre('save', async function () {
